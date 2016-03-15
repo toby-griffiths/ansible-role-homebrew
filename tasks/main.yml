@@ -1,11 +1,17 @@
 ---
+- name: Get current account's username.
+  shell: whoami
+  register: homebrew_whoami
+  changed_when: false
+  always_run: true
+
 - name: Setup homebrew install path.
   file:
     path: "{{ homebrew_install_path }}"
     group: admin
     mode: 0775
     state: directory
-  become: true
+  become: yes
 
 - name: Ensure homebrew is installed.
   git:
@@ -19,11 +25,19 @@
 - name: Ensure proper permissions on homebrew_brew_bin_path dirs.
   file:
     path: "{{ homebrew_brew_bin_path }}"
-    group: admin
     mode: 0775
     state: directory
     recurse: true
-  become: true
+  become: yes
+
+- name: Ensure proper ownership on homebrew_install_path subdirs.
+  file:
+    path: "{{ homebrew_install_path }}"
+    state: directory
+    owner: "{{ homebrew_whoami.stdout }}"
+    group: admin
+    recurse: true
+  become: yes
 
 - name: Check if homebrew binary is already in place.
   stat: "path={{ homebrew_brew_bin_path }}/brew"
@@ -35,17 +49,17 @@
     dest: "{{ homebrew_brew_bin_path }}/brew"
     state: link
   when: homebrew_binary.stat.exists == false
-  become: true
+  become: yes
 
 # Tap.
 - name: Ensure configured taps are tapped.
   homebrew_tap: "tap={{ item }} state=present"
-  with_items: homebrew_taps
+  with_items: "{{ homebrew_taps }}"
 
 # Brew.
 - name: Ensure configured homebrew packages are installed.
   homebrew: "name={{ item }} state=present"
-  with_items: homebrew_installed_packages
+  with_items: "{{ homebrew_installed_packages }}"
 
 - name: Upgrade all homebrew packages (if configured).
   homebrew: update_homebrew=yes upgrade_all=yes
@@ -63,7 +77,7 @@
 - name: Install configured cask applications.
   command: >
     bash -l -c '{{ homebrew_brew_bin_path }}/brew cask install {{ item }} --appdir={{ homebrew_cask_appdir }}'
-  with_items: homebrew_cask_apps
+  with_items: "{{ homebrew_cask_apps }}"
   when: "'{{ item }}' not in homebrew_cask_list.stdout"
 
 - name: Check for Brewfile.
